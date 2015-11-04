@@ -53,23 +53,23 @@
  *          blinks red
  *          terminal state -- powercycle to start again
  * pins
- *      POS HW      ARD USAGE                   NOTES
- *      1.1 ^RESET    - -                       eval board pulls up 10k
- *      1.2 PHOTO    A0 -
- *      1.3 CH_PD     - -                       eval board pulls up 10k
- *      1.4 LED7     16 wire to RESET           see "deep sleep" below
- *      1.5 LED6     14 -
- *      1.6 rGb      12 status querying
- *      1.7 rgB      13 status connecting
- *      1.8 VCC       - -
- *      2.1 TX        1 -                       onboard LED (blue)
- *      2.2 RX        3 -
- *      2.3 LED5      4 servo enable            n-channel mosfet, on=high
- *      2.4 LED4      5 servo position
- *      2.5 LED3      0 pullup                  see "deep sleep" below
- *      2.6 LED2      2 pullup                  see "deep sleep" below
- *      2.7 Rgb      15 status error            eval board pulls down 1k (AKA MTDO)
- *      2.8 GND       - -
+ *      POS HW      USAGE                   NOTES
+ *      1.1 ^RESET  pullup 10k
+ *      1.2 ADC     -
+ *      1.3 CH_PD   pullup 10k
+ *      1.4 GPIO16  wire to RESET           see "deep sleep" below
+ *      1.5 GPIO14  RED: status error
+ *      1.6 GPIO12  GREEN: status querying
+ *      1.7 GPIO13  BLUE: status connecting
+ *      1.8 VCC     -
+ *      2.1 TX      -
+ *      2.2 RX      -
+ *      2.3 GPIO4   servo enable            n-channel mosfet, on=high
+ *      2.4 GPIO5   servo position
+ *      2.5 GPIO0   pullup 10k              see "deep sleep" below
+ *      2.6 GPIO2   pullup 10k              see "deep sleep" below
+ *      2.7 GPIO15  pulldown 10k
+ *      2.8 GND     -
  * deep sleep
  *      pullup gpio0 & gpio2
  *      connect gpio16 to reset
@@ -87,15 +87,15 @@
 
 #define USE_SERIAL
 
-const char* WIFI_SSID       = "foo";
-const char* WIFI_PASS       = "bar";
-const char* EVENTS_HOST     = "drewfish-iot.herokuapp.com";
-const long  EVENTS_PORT     = 80;
-const char* EVENTS_REQUEST  = "GET /sfbc/events HTTP/1.1\r\nHost: drewfish-iot.herokuapp.com\r\nConnection: close\r\n\r\n";
+const char WIFI_SSID[]      = "foo";
+const char WIFI_PASS[]      = "bar";
+const char EVENTS_HOST[]    = "drewfish-iot.herokuapp.com";
+const long EVENTS_PORT      = 80;
+const char EVENTS_REQUEST[] = "GET /sfbc/events HTTP/1.1\r\nHost: drewfish-iot.herokuapp.com\r\nConnection: close\r\n\r\n";
 
-const uint8_t PIN_SERVO_ENABLE      = 4;
-const uint8_t PIN_SERVO_POSITION    = 5;
-const uint8_t PINS_RGBLED[]         = {15, 12, 13}; // red, green, blue
+const uint8_t PIN_SERVO_ENABLE      = 5;
+const uint8_t PIN_SERVO_POSITION    = 4;
+const uint8_t PINS_RGBLED[]         = {14, 12, 13}; // red, green, blue
 void (*STATE)(void)         = NULL;
 long ERROR_CODE             = 0;
 unsigned long LAST_MS       = 0;    // (milliseconds) arduino millis() from last query
@@ -120,6 +120,8 @@ struct StatusDevice {
     uint8_t m_pin;
     bool m_on;
     void setup() {
+//DOING
+//return;
         m_on = false;
         for (uint8_t pin = 0; pin < 3; pin++) {
             pinMode(PINS_RGBLED[pin], OUTPUT);
@@ -128,15 +130,21 @@ struct StatusDevice {
     }
     // 0=red 1=green 2=blue
     void on(uint8_t pin) {
+//DOING
+//return;
         m_pin = pin;
         m_on = true;
         _update();
     }
     void toggle() {
+//DOING
+//return;
         m_on = !m_on;
         _update();
     }
     void off() {
+//DOING
+//return;
         m_on = false;
         _update();
     }
@@ -151,19 +159,26 @@ struct FlagDevice {
     Servo m_servo;
     uint8_t m_pos;
     void setup() {
+//DOING
+//return;
+//        m_servo.attach(PIN_SERVO_POSITION);
         m_pos = 0;
         pinMode(PIN_SERVO_ENABLE, OUTPUT);
         digitalWrite(PIN_SERVO_ENABLE, LOW);
     }
     // 0=down 1=middle 2=up
     void on(uint8_t pos) {
-        m_servo.attach(PIN_SERVO_POSITION);
+//DOING
+return;
         digitalWrite(PIN_SERVO_ENABLE, HIGH);
+        delay(MS_SERVO_SLEW);   // give mosfet/servo a chance to energize
         m_pos = pos;
         refresh();
     }
     // call periodically to maintain position
     void refresh() {
+//DOING
+return;
         uint8_t degrees;
         switch (m_pos) {
             case 0: degrees =  10; break;
@@ -173,12 +188,13 @@ struct FlagDevice {
         m_servo.write(degrees);
     }
     void off() {
+//DOING
+return;
         if (m_pos) {
             m_servo.write(10);
             delay(m_pos * MS_SERVO_SLEW);
             m_pos = 0;
         }
-        m_servo.detach();
         digitalWrite(PIN_SERVO_ENABLE, LOW);
     }
 } devFlag;
@@ -202,7 +218,7 @@ unsigned long getWallclock() {
 
 void stateError() {
 #ifdef USE_SERIAL
-    Serial.print(F("STATE ERROR "));
+    Serial.print("STATE ERROR ");
     Serial.println(ERROR_CODE, HEX);
 #endif
     devStatus.on(0);
@@ -214,7 +230,8 @@ void stateError() {
 
 void stateConnecting() {
 #ifdef USE_SERIAL
-    Serial.println(F("STATE CONNECTING"));
+    Serial.println("STATE CONNECTING");
+    WiFi.printDiag(Serial);
 #endif
     devStatus.on(2);
     WiFi.mode(WIFI_STA);
@@ -223,7 +240,7 @@ void stateConnecting() {
     while (true) {
         uint8_t status = WiFi.status();
 #ifdef USE_SERIAL
-        Serial.print(F("--status "));
+        Serial.print("--status ");
         Serial.println(status, HEX);
 #endif
         switch (status) {
@@ -261,13 +278,13 @@ void stateConnecting() {
 
 void stateQuerying() {
 #ifdef USE_SERIAL
-    Serial.println(F("STATE QUERYING"));
+    Serial.println("STATE QUERYING");
 #endif
     devStatus.on(1);
     WiFiClient client;
     if (! client.connect(EVENTS_HOST, EVENTS_PORT)) {
 #ifdef USE_SERIAL
-        Serial.println(F("--FAILED to connect"));
+        Serial.println("--FAILED to connect");
 #endif
         devStatus.off();
         delay(MS_RETRY_PAUSE);
@@ -279,7 +296,7 @@ void stateQuerying() {
         devStatus.toggle();
         if (! client.connected()) {
 #ifdef USE_SERIAL
-            Serial.println(F("--ABORTED connection"));
+            Serial.println("--ABORTED connection");
 #endif
             devStatus.off();
             STATE = stateError;
@@ -293,11 +310,11 @@ void stateQuerying() {
     GROUND_OCCUPIED = !!client.parseInt();
     GROUND_WC = client.parseInt();
 #ifdef USE_SERIAL
-    Serial.print(F("--now:"));
+    Serial.print("--now:");
     Serial.print(LAST_WC);
-    Serial.print(F("  status:"));
-    Serial.print(GROUND_OCCUPIED ? F("occupied") : F("free"));
-    Serial.print(F("  next:"));
+    Serial.print("  status:");
+    Serial.print(GROUND_OCCUPIED ? "occupied" : "free");
+    Serial.print("  next:");
     Serial.println(GROUND_WC);
 #endif
     devStatus.off();
@@ -307,7 +324,7 @@ void stateQuerying() {
 
 void stateDisconnecting() {
 #ifdef USE_SERIAL
-    Serial.println(F("STATE DISCONNECTING"));
+    Serial.println("STATE DISCONNECTING");
 #endif
     WiFi.disconnect();
     delay(MS_WIFI_SLEW);
@@ -318,29 +335,29 @@ void stateDisconnecting() {
 void stateDisplaying() {
     unsigned long now_wc = getWallclock();
 #ifdef USE_SERIAL
-    Serial.println(F("STATE DISPLAYING"));
-    Serial.print(F("--now:"));
+    Serial.println("STATE DISPLAYING");
+    Serial.print("--now:");
     Serial.print(now_wc);
-    Serial.print(F("  status:"));
-    Serial.print(GROUND_OCCUPIED ? F("occupied") : F("free"));
-    Serial.print(F("  next:"));
+    Serial.print("  status:");
+    Serial.print(GROUND_OCCUPIED ? "occupied" : "free");
+    Serial.print("  next:");
     Serial.println(GROUND_WC);
 #endif
     if (GROUND_OCCUPIED) {
 #ifdef USE_SERIAL
-        Serial.println(F("--occupied"));
+        Serial.println("--occupied");
 #endif
         devFlag.on(2);
     } else {
         bool soon = now_wc > (GROUND_WC - S_SOON);
         if (soon) {
 #ifdef USE_SERIAL
-            Serial.println(F("--soon"));
+            Serial.println("--soon");
 #endif
             devFlag.on(1);
         } else {
 #ifdef USE_SERIAL
-            Serial.println(F("--free"));
+            Serial.println("--free");
 #endif
             devFlag.off();
             STATE = stateSleeping;
@@ -356,12 +373,12 @@ void stateDisplaying() {
 
 
 void stateSleeping() {
-    unsigned long ms = MS_UPDATE * 1000;
+    unsigned long ms = MS_UPDATE;
 #ifdef USE_SERIAL
-    Serial.println(F("STATE SLEEPING"));
-    Serial.print(F("--sleeping "));
+    Serial.println("STATE SLEEPING");
+    Serial.print("--sleeping ");
     Serial.print(ms / 1000);
-    Serial.println(F(" seconds"));
+    Serial.println(" seconds");
     Serial.flush();
 #endif
     // TODO -- haven't gotten sleep to work yet
@@ -373,32 +390,35 @@ void stateSleeping() {
 
 
 void stateDebuggingFlag() {
-    Serial.println(F("STATE DEBUGGING FLAG"));
+    Serial.println("STATE DEBUGGING FLAG");
     for (int pos = 0; pos < 3; pos++) {
-        Serial.print(F("--pos "));
+        Serial.print("--pos ");
         Serial.println(pos);
+        devStatus.on(pos);
         devFlag.on(pos);
         for (int r = (2000 / MS_FLAG_REFRESH); r > 0; r--) {
             delay(MS_FLAG_REFRESH);
             devFlag.refresh();
         }
+        devStatus.off();
     }
-    Serial.println(F("--off"));
+    Serial.println("--off");
     devFlag.off();
     delay(2000);
 }
 
 
 void setup() {
+    WiFi.mode(WIFI_OFF);
 #ifdef USE_SERIAL
     Serial.begin(115200);
     // DEBUGGING -- Serial.setDebugOutput(true);
 #endif
     devStatus.setup();
     devFlag.setup();
+    delay(MS_BOOT_PAUSE);
     STATE = stateConnecting;
     // DEBUGGING -- STATE = stateDebuggingFlag;
-    delay(MS_BOOT_PAUSE);
 }
 
 
