@@ -44,8 +44,7 @@
  *          ->displaying
  *      displaying
  *          updates UI to show state of the ground floor
- *          ->sleeping if free for a while
- *          ->connecting to update schedule
+ *          ->sleeping
  *      sleeping
  *          initiates sleep
  *          ->connecting to update schedule
@@ -64,8 +63,8 @@
  *      1.8 VCC     -
  *      2.1 TX      -
  *      2.2 RX      -
- *      2.3 GPIO4   servo enable            n-channel mosfet, on=high
- *      2.4 GPIO5   servo position
+ *      2.3 GPIO5   servo enable            n-channel mosfet, on=high
+ *      2.4 GPIO4   servo position
  *      2.5 GPIO0   pullup 10k              see "deep sleep" below
  *      2.6 GPIO2   pullup 10k              see "deep sleep" below
  *      2.7 GPIO15  pulldown 10k
@@ -82,7 +81,6 @@
 
 
 #include <ESP8266WiFi.h>
-#include <Servo.h>
 
 
 #define USE_SERIAL
@@ -110,9 +108,10 @@ long MS_RETRY_PAUSE     = 1000;     // pause before trying again (connecting or 
 long MS_STATUS_ERROR    = 500;      // blink cycle when there's an error
 long MS_STATUS_CONNECTING = 300;    // blink cycle when connecting
 long MS_STATUS_QUERYING = 100;      // blink cycle when querying
-long MS_FLAG_REFRESH    = 200;      // how often to remind servo that it's supposed to be doing something
 long MS_WIFI_SLEW       = 100;      // give Arduino WiFi API time to effect change
-long MS_SERVO_SLEW      = 300;      // give servo time to move into position
+long MS_SERVO_SLEW      = 600;      // give servo time to move into position
+long MS_SERVO_REFRESH   = 15;       // how often to remind servo that it's supposed to be doing something
+long US_SERVO_PULSE[3]  = { 670, 1500, 2700 };  // microseconds for each position
 
 
 // displays the operation status
@@ -120,8 +119,6 @@ struct StatusDevice {
     uint8_t m_pin;
     bool m_on;
     void setup() {
-//DOING
-//return;
         m_on = false;
         for (uint8_t pin = 0; pin < 3; pin++) {
             pinMode(PINS_RGBLED[pin], OUTPUT);
@@ -130,21 +127,15 @@ struct StatusDevice {
     }
     // 0=red 1=green 2=blue
     void on(uint8_t pin) {
-//DOING
-//return;
         m_pin = pin;
         m_on = true;
         _update();
     }
     void toggle() {
-//DOING
-//return;
         m_on = !m_on;
         _update();
     }
     void off() {
-//DOING
-//return;
         m_on = false;
         _update();
     }
@@ -154,46 +145,27 @@ struct StatusDevice {
 } devStatus;
 
 
-// raise and lower the flag
+// turn the flag
 struct FlagDevice {
-    Servo m_servo;
-    uint8_t m_pos;
+    // The Servo library seems to be tripping up the ESP8266WiFi library,
+    // so we'll do the servo control by hand.
     void setup() {
-//DOING
-//return;
-//        m_servo.attach(PIN_SERVO_POSITION);
-        m_pos = 0;
         pinMode(PIN_SERVO_ENABLE, OUTPUT);
+        pinMode(PIN_SERVO_POSITION, OUTPUT);
         digitalWrite(PIN_SERVO_ENABLE, LOW);
+        digitalWrite(PIN_SERVO_POSITION, LOW);
+        // calibrate
+        move(2);
+        move(0);
     }
-    // 0=down 1=middle 2=up
-    void on(uint8_t pos) {
-//DOING
-return;
+    // 0=left 1=middle 2=right
+    void move(uint8_t pos) {
         digitalWrite(PIN_SERVO_ENABLE, HIGH);
-        delay(MS_SERVO_SLEW);   // give mosfet/servo a chance to energize
-        m_pos = pos;
-        refresh();
-    }
-    // call periodically to maintain position
-    void refresh() {
-//DOING
-return;
-        uint8_t degrees;
-        switch (m_pos) {
-            case 0: degrees =  10; break;
-            case 1: degrees =  90; break;
-            case 2: degrees = 180; break;
-        }
-        m_servo.write(degrees);
-    }
-    void off() {
-//DOING
-return;
-        if (m_pos) {
-            m_servo.write(10);
-            delay(m_pos * MS_SERVO_SLEW);
-            m_pos = 0;
+        for (int8_t i = (MS_SERVO_SLEW / MS_SERVO_REFRESH); i >= 0; i--) {
+            digitalWrite(PIN_SERVO_POSITION, HIGH);
+            delayMicroseconds(US_SERVO_PULSE[pos]);
+            digitalWrite(PIN_SERVO_POSITION, LOW);
+            delay(MS_SERVO_REFRESH);
         }
         digitalWrite(PIN_SERVO_ENABLE, LOW);
     }
@@ -231,7 +203,7 @@ void stateError() {
 void stateConnecting() {
 #ifdef USE_SERIAL
     Serial.println("STATE CONNECTING");
-    WiFi.printDiag(Serial);
+    // DEBUGGING -- WiFi.printDiag(Serial);
 #endif
     devStatus.on(2);
     WiFi.mode(WIFI_STA);
@@ -347,28 +319,22 @@ void stateDisplaying() {
 #ifdef USE_SERIAL
         Serial.println("--occupied");
 #endif
-        devFlag.on(2);
+        devFlag.move(2);
     } else {
         bool soon = now_wc > (GROUND_WC - S_SOON);
         if (soon) {
 #ifdef USE_SERIAL
             Serial.println("--soon");
 #endif
-            devFlag.on(1);
+            devFlag.move(1);
         } else {
 #ifdef USE_SERIAL
             Serial.println("--free");
 #endif
-            devFlag.off();
-            STATE = stateSleeping;
-            return;
+            devFlag.move(0);
         }
     }
-    for (int i = (MS_UPDATE / MS_FLAG_REFRESH); i >= 0; i--) {
-        delay(MS_FLAG_REFRESH);
-        devFlag.refresh();
-    }
-    STATE = stateConnecting;
+    STATE = stateSleeping;
 }
 
 
@@ -395,15 +361,9 @@ void stateDebuggingFlag() {
         Serial.print("--pos ");
         Serial.println(pos);
         devStatus.on(pos);
-        devFlag.on(pos);
-        for (int r = (2000 / MS_FLAG_REFRESH); r > 0; r--) {
-            delay(MS_FLAG_REFRESH);
-            devFlag.refresh();
-        }
+        devFlag.move(pos);
         devStatus.off();
     }
-    Serial.println("--off");
-    devFlag.off();
     delay(2000);
 }
 
@@ -414,9 +374,9 @@ void setup() {
     Serial.begin(115200);
     // DEBUGGING -- Serial.setDebugOutput(true);
 #endif
+    delay(MS_BOOT_PAUSE);
     devStatus.setup();
     devFlag.setup();
-    delay(MS_BOOT_PAUSE);
     STATE = stateConnecting;
     // DEBUGGING -- STATE = stateDebuggingFlag;
 }
