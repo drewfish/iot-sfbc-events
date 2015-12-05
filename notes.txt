@@ -1,0 +1,32 @@
+
+
+
+FOR PT -- v1
+    no servo, just LEDs
+
+    POS HW      USAGE
+    1.1 ^RESET  10k -- 3v3 rail
+    1.2 ADC     -
+    1.3 CH_PD   10k -- 3v3 rail
+    1.4 GPIO16  -
+    1.5 GPIO14  470R -- RED
+    1.6 GPIO12  470R -- YELLOW
+    1.7 GPIO13  -
+    1.8 VCC     3v3 rail
+
+    2.1 TX      FTDI:RX
+    2.2 RX      FTDI:TX
+    2.3 GPIO5   -
+    2.4 GPIO4   -
+    2.5 GPIO0   10k -- 3v3 rail
+                FTDI:DTR
+                PGM
+    2.6 GPIO2   10k -- 3v3 rail
+    2.7 GPIO15  10k -- GND rail
+    2.8 GND     GND rail
+
+    LED:common -- GND rail
+    FTDI:GND -- GND rail
+    PGM -- GND rail
+
+
