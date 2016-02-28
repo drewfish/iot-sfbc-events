@@ -1,32 +1,254 @@
 
 
+TODO
+    [esp] wifi fails to second time
+        perhaps try static IP address
+        perhaps only in STATION mode
+        perhaps mode 3 -- STA + SOFTAP
+        perhaps
+            wifi.setmode(3)
+            wifi.setmode(wifi.STATION)
+            wifi.sta.config("myssid","mypassword")
+        http://internetofhomethings.com/homethings/?p=631
 
-FOR PT -- v1
-    no servo, just LEDs
+    [algo] query timeout
 
-    POS HW      USAGE
-    1.1 ^RESET  10k -- 3v3 rail
-    1.2 ADC     -
-    1.3 CH_PD   10k -- 3v3 rail
-    1.4 GPIO16  -
-    1.5 GPIO14  470R -- RED
-    1.6 GPIO12  470R -- YELLOW
-    1.7 GPIO13  -
-    1.8 VCC     3v3 rail
 
-    2.1 TX      FTDI:RX
-    2.2 RX      FTDI:TX
-    2.3 GPIO5   -
-    2.4 GPIO4   -
-    2.5 GPIO0   10k -- 3v3 rail
-                FTDI:DTR
-                PGM
-    2.6 GPIO2   10k -- 3v3 rail
-    2.7 GPIO15  10k -- GND rail
-    2.8 GND     GND rail
 
-    LED:common -- GND rail
-    FTDI:GND -- GND rail
-    PGM -- GND rail
+BOARD
+    EK1653 esp8266 esp-12 full development/evaluation board
+        http://tronixlabs.com/wireless/esp8266/esp8266-esp-12-full-evaluation-board-australia/
+        jp4: gpio0 , gnd
+        gpio4 - led5(red)
+        gpio5 - led4(red)
+        gpio0 - led3(red)
+        gpio2 - led2(red)
+        gnd - led1(blue)
+        gpio12 - rgbled(green)
+        gpio13 - rgbled(blue)
+        gpio14 - led6(red)
+        gpio15 - rgbled(red)
+        gpio16 - led7(red)
+    ARDUINO
+        http://www.esp8266.com/viewtopic.php?p=15603#p15603
+        https://github.com/esp8266/Arduino/blob/esp8266/hardware/esp8266com/esp8266/doc/reference.md
+                      ANT
+             RESET -|     |- D1~ TX0
+               ADC -|     |- D3~ RX0
+              CHPD -|     |- D5~ SCL
+              D16~ -|     |- D4~ SDA
+              D14~ -|     |- D0~
+              D12~ -|     |- D2~ TX1
+         RX0* D13~ -|     |- D15~ TX0*
+               VCC -|     |- GND
+
+        D0-D15 INPUT, OUTPUT, INPUT_PULLUP
+        D16 INPUT, OUTPUT, INPUT_PULLDOWN_16
+        default INPUT
+        D6-11 connected to flash memory
+        ADC analogRead(A0) 0-1.0V
+        PWD analogWrite(pin, 0 - PWMRANGE) on D0-15
+            PWMRANGE defaults to 1023, otherwise analogWriteRange(new_range)
+            frequency defaults to 1kHz, otherwise analogWriteFreq(new_frequency)
+        delay(ms) pauses the sketch for a given number of milliseconds and allows WiFi and TCP/IP tasks to run
+        loop() or delay() often
+        SERIAL
+            Serial uses UART0 mapped to GPIO1(TX) GPIO3(RX)
+                Serial.swap() (called after Serial.begin) maps UART0 to GPIO15(TX) GPIO13(RX)
+            Serial1 uses UART1 mapped to GPIO2(TX)
+            Serial.setDebugOutput(true) to send wifi debug output
+        PROGMEM
+            same as normal, but strings not pooled
+            const char HTTP[] PROGMEM = "http:";
+            String str; str += FPSTR(HTTP);
+        WIFI
+            WiFiServer, WiFiClient, and WiFiUDP behave mostly the same way as with WiFi shield library
+            http://www.arduino.cc/en/Reference/WiFi
+            wifi.begin(ssid, pass)
+            while wifi.status() != WL_CONNECTED
+                0   WL_IDLE_STATUS          wait
+                1   WL_NO_SSID_AVAIL        retry
+                2   WL_SCAN_COMPLETED       error
+                3   WL_CONNECTED            success
+                4   WL_CONNECT_FAILED       retry
+                5   WL_CONNECTION_LOST      retry
+                6   WL_DISCONNECTED         wait
+                255 WL_NO_SHIELD            error
+                delay(...)
+            WiFiClient client
+            client.connect(host, port) => boolean success
+            client.println("GET {url} HTTP/1.1")
+            client.println("Host: {host}")
+            client.println("Connection: close")
+            client.println()
+            client.setTimeout(ms=1000)
+            while client.available()
+                String line = client.readStringUntil('\r')
+            client.flush()
+            client.stop()
+            wifi.disconnect()
+        I2C
+            Before using I2C, pins for SDA and SCL need to be set by calling Wire.begin(int sda, int scl)
+            defaults to 4(SDA) 5(SCL)
+        SPECIFIC
+            ESP.deepSleep(microseconds, mode)
+                mode is WAKE_RF_DEFAULT, WAKE_RFCAL, WAKE_NO_RFCAL, WAKE_RF_DISABLED
+                GPIO16 needs to be tied to RST to wake from deepSleep
+            ESP.restart() restarts the CPU
+
+        https://www.arduino.cc/en/Reference/Stream
+        /Applications/Arduino.app/Contents/Java/hardware/arduino/avr/cores/arduino/Stream.h
+
+            // reads data from the stream until the target string is found
+            // returns true if target string is found, false if timed out (see setTimeout)
+            bool find(char *target)
+            bool find(uint8_t *target)
+            bool find(char target)
+
+            // reads data from the stream until the target string of given length is found
+            // returns true if target string is found, false if timed out
+            bool find(char *target, size_t length)
+            bool find(uint8_t *target, size_t length)
+
+            // as find but search ends if the terminator string is found
+            bool findUntil(char *target, char *terminator)
+            bool findUntil(uint8_t *target, char *terminator)
+            bool findUntil(char *target, size_t targetLen, char *terminate, size_t termLen)
+            bool findUntil(uint8_t *target, size_t targetLen, char *terminate, size_t termLen)
+
+            // returns the first valid (long) integer value from the current position.
+            // initial characters that are not digits (or the minus sign) are skipped
+            // integer is terminated by the first character that is not a digit.
+            long parseInt()
+
+            // float version of parseInt
+            float parseFloat()
+
+            // read chars from stream into buffer
+            // terminates if length characters have been read or timeout (see setTimeout)
+            // returns the number of characters placed in the buffer (0 means no valid data found)
+            size_t readBytes( char *buffer, size_t length)
+            size_t readBytes( uint8_t *buffer, size_t length)
+
+            // as readBytes with terminator character
+            // terminates if length characters have been read, timeout, or if the terminator character  detected
+            // returns the number of characters placed in the buffer (0 means no valid data found)
+            size_t readBytesUntil( char terminator, char *buffer, size_t length)
+            size_t readBytesUntil( char terminator, uint8_t *buffer, size_t length)
+
+            String readString()
+            String readStringUntil(char terminator)
+
+    arduino
+        https://github.com/esp8266/Arduino
+
+
+    https://github.com/esp8266/Arduino/blob/esp8266/hardware/esp8266com/esp8266/doc/boards.md
+        *tx AKA gpio2
+        BOOTLOAD AND USAGE
+            PIN     RES     FTDI
+            vcc             vcc
+            gnd             gnd
+            tx*             rx
+            rx              tx
+            gpio0   UP      dtr
+            reset   UP
+            gpio15  dn
+            ch_pd   UP
+                    dn      cts
+
+        IMPROVED STABILITY
+            vcc - 100nf - gnd       DEVBOARD C1 100nf
+            vcc - 3v3
+            ch_pd - 10k - 3v3       DEVBOARD R11 10k
+            rest - 10k - 3v3        DEVBOARD R15 10k
+            gpio0 - 10k - 3v3
+            gpio10 - 10k - gnd      DEVBOARD R16 1k
+
+        FTDI
+            ctr - 10k - gnd
+
+
+    power management
+        https://learn.sparkfun.com/tutorials/esp8266-thing-hookup-guide/example-sketch-goodnight-thing-sleep-mode
+          // deepSleep time is defined in microseconds. Multiply seconds by 1e6
+          ESP.deepSleep(sleepTimeS * 1000000);
+
+
+RTC
+    http://www.maximintegrated.com/en/products/digital/real-time-clocks/DS3231.html
+    http://www.maximintegrated.com/en/app-notes/index.mvp/id/5791
+
+
+DESIGN
+    goals
+        show when 1st floor or annex are being used
+        show when 1st floor or annex will be used soon
+        don't show when someone is a guest at the annex
+        times are reasonably accurate
+        update schedule periodically
+        show error conditions
+        manage power usage to last as long as possible
+    error conditions
+        failed to connect to wifi (after X tries)
+        failed to retrieve schedule
+        failed to understand schedule
+        low voltage
+    states
+        wifi-connecting
+        status-querying
+        wifi-disconnecting
+        status-displaying
+        error
+
+    display
+        status
+            loading events
+            error
+        floor statii (one for each of ground & annex)
+            state
+                free until TIME (dimmed)
+                busy until TIME
+            time
+                forever
+                30min 1h 2h 3h 4h 5h 6h
+
+        shift register
+            https://www.arduino.cc/en/Reference/ShiftOut
+            CE_     -- enables reading (low) (common) (AKA chip enabled)
+            CLK     -- clock
+            SER     -- data
+            LD_     -- load program (low) (common)
+            OE_     -- output enabled (low) (common) (AKA chip powerdown)
+            CLR_    -- clear (low) (common)
+
+        bar display
+            https://www.sparkfun.com/products/12694
+            can this be driven by PWM?
+
+    arduino pinout
+        d0  - program_
+        d1  - tx0
+        d2  -
+        d3  - rx0
+        d4  - i2c sda
+        d5  - i2c scl
+        (d6-d11 - flash memory)
+        d12 -
+        d13 -
+        d14 -
+        d15 -
+        d16 -
+        adc - consider configuring for VCC meter
+
+HARDWARE
+    POWER
+        wall wart
+            beware of voltage dropouts
+        barrel jack
+        power switch        (also used for a hard reset)
+        linear regulator for VSS
+
+
 
 
